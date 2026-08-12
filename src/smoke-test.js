@@ -19,6 +19,10 @@ function closeServer(server) {
   return new Promise((resolve) => server.close(resolve));
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function onceFinished(contents) {
   return new Promise((resolve, reject) => {
     const cleanup = () => {
@@ -101,7 +105,9 @@ async function runSmokeTest() {
     });
   });
 
-  const win = new BrowserWindow({ show: false, width: 800, height: 600 });
+  // The window is visible only inside Xvfb in CI. A visible, focused view matches
+  // the user path for native selection/copy semantics and can own the X11 clipboard.
+  const win = new BrowserWindow({ show: true, width: 800, height: 600 });
   const view = new WebContentsView({
     webPreferences: {
       session: smokeSession,
@@ -112,6 +118,8 @@ async function runSmokeTest() {
   });
   win.contentView.addChildView(view);
   view.setBounds({ x: 0, y: 0, width: 800, height: 600 });
+  win.focus();
+  view.webContents.focus();
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'phw-smoke-'));
   try {
@@ -128,14 +136,19 @@ async function runSmokeTest() {
     await view.webContents.savePage(snapshot, 'MHTML');
     assert.ok((await fs.stat(snapshot)).size > 0, 'MHTML snapshot should be written');
 
+    clipboard.clear();
+    view.webContents.focus();
     await view.webContents.executeJavaScript(`(() => {
       const range = document.createRange();
       range.selectNodeContents(document.getElementById('copy'));
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-    })()`);
+      return selection.toString();
+    })()`).then((selection) => assert.equal(selection, 'clipboard-smoke-value'));
+    await delay(50);
     view.webContents.copy();
+    await delay(50);
     assert.equal(clipboard.readText(), 'clipboard-smoke-value', 'selected remote text should copy to system clipboard');
 
     await loadAndWait(view.webContents, `${base}/error`);
