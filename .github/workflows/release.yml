@@ -31,6 +31,9 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Source checks and unit tests
         run: npm run check
+      - name: Ensure Electron binary
+        if: runner.os == 'Linux'
+        run: node scripts/install-electron-with-retry.js
       - name: Linux Electron integration smoke test
         if: runner.os == 'Linux'
         run: PHW_SMOKE_TEST=1 xvfb-run -a npx electron . --no-sandbox
