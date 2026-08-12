@@ -35,7 +35,7 @@ jobs:
         if: runner.os == 'Linux'
         run: PHW_SMOKE_TEST=1 xvfb-run -a npx electron . --no-sandbox
       - name: Build desktop packages
-        run: npm run dist
+        run: node scripts/build-with-retry.js
       - uses: actions/upload-artifact@v4
         with:
           name: puzzle-hunt-workbench-${{ runner.os }}-${{ runner.arch }}
