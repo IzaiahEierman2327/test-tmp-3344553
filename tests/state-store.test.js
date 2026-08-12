@@ -1,4 +1,5 @@
 'use strict';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -16,6 +17,24 @@ test('state store creates defaults and persists updates atomically', async () =>
     const loaded = await store.load();
     assert.equal(loaded.settings.splitRatio, 0.42);
     assert.ok(loaded.workspaces[loaded.activeWorkspaceId]);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('one failed write does not poison all later saves', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'phw-state-recover-'));
+  const file = path.join(dir, 'state.json');
+  try {
+    await fs.mkdir(file);
+    const store = new StateStore(file);
+    const state = await store.load();
+    await assert.rejects(store.save(state));
+    await fs.rm(file, { recursive: true, force: true });
+    state.settings.splitRatio = 0.61;
+    await store.save(state);
+    const loaded = await store.load();
+    assert.equal(loaded.settings.splitRatio, 0.61);
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
