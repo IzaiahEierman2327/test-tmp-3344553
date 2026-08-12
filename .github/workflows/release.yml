@@ -21,18 +21,24 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
       - name: Source checks and unit tests
         run: npm run check
-      - name: Linux application smoke test
+      - name: Ensure Electron binary
+        if: runner.os == 'Linux'
+        run: node scripts/install-electron-with-retry.js
+      - name: Linux Electron integration smoke test
         if: runner.os == 'Linux'
         run: PHW_SMOKE_TEST=1 xvfb-run -a npx electron . --no-sandbox
       - name: Build desktop packages
-        run: npm run dist
+        run: node scripts/build-with-retry.js
       - uses: actions/upload-artifact@v4
         with:
           name: puzzle-hunt-workbench-${{ runner.os }}-${{ runner.arch }}
@@ -51,6 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -59,16 +67,31 @@ jobs:
           pattern: puzzle-hunt-workbench-*
           path: release-artifacts
           merge-multiple: true
+      - name: Validate release version transition
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          PREVIOUS_VERSION="$(git show HEAD^:package.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})" || true)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$VERSION" = "$PREVIOUS_VERSION" ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "package.json version is unchanged ($VERSION); build validated, release intentionally skipped."
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Release version changed: ${PREVIOUS_VERSION:-none} -> $VERSION"
+          fi
       - name: Create GitHub Release
+        if: steps.version.outputs.release == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="$(node -p "require('./package.json').version")"
+          VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; leaving it unchanged."
-            exit 0
+            echo "Release tag $TAG already exists; refusing to replace an existing release."
+            exit 1
           fi
           gh release create "$TAG" release-artifacts/* \
             --target "$GITHUB_SHA" \

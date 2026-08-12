@@ -21,13 +21,18 @@ class StateStore {
 
   save(state) {
     const snapshot = JSON.stringify(state, null, 2) + '\n';
-    this.writeChain = this.writeChain.then(async () => {
+    const task = this.writeChain.catch(() => undefined).then(async () => {
       await fs.mkdir(path.dirname(this.filePath), { recursive: true });
       const temp = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
-      await fs.writeFile(temp, snapshot, 'utf8');
-      await fs.rename(temp, this.filePath);
+      try {
+        await fs.writeFile(temp, snapshot, 'utf8');
+        await fs.rename(temp, this.filePath);
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => undefined);
+      }
     });
-    return this.writeChain;
+    this.writeChain = task;
+    return task;
   }
 }
 

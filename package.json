@@ -1,9 +1,10 @@
 {
   "name": "puzzle-hunt-workbench",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
-  "description": "Desktop puzzle-hunt workspace with multi-tab puzzle browsing, a persistent canvas, sleeping tools, and offline puzzle snapshots.",
-  "main": "src/main.js",
+  "description": "Desktop puzzle-hunt workspace with multi-tab puzzle browsing, a persistent canvas, sleeping tools, and safe offline puzzle snapshots.",
+  "author": "Puzzle Hunt Workbench contributors",
+  "main": "src/main-v012.js",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
