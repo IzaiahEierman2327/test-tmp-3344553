@@ -6,6 +6,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { StateStore } = require('../src/core/state-store');
+const { createDefaultState } = require('../src/core/default-state');
 
 test('state store creates defaults and persists updates atomically', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'phw-state-'));
@@ -28,7 +29,7 @@ test('one failed write does not poison all later saves', async () => {
   try {
     await fs.mkdir(file);
     const store = new StateStore(file);
-    const state = await store.load();
+    const state = createDefaultState();
     await assert.rejects(store.save(state));
     await fs.rm(file, { recursive: true, force: true });
     state.settings.splitRatio = 0.61;
