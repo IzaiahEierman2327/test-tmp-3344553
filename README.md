@@ -40,10 +40,14 @@ Puzzle, Canvas and Tool web pages support normal system clipboard copying. Selec
 
 ## Portable builds and installation
 
-Windows releases contain two clearly named executables:
+Windows releases intentionally provide two different distribution forms:
 
-- `...Windows-Setup.exe`: assisted installer; the installation directory can be changed during setup.
-- `...Windows-Portable.exe`: no installation required. By default its data is kept in a `Puzzle Hunt Workbench Data` folder beside the portable executable.
+- `...Windows-Setup.exe`: assisted installer. It installs the application and allows the installation directory to be changed during setup.
+- `...Windows-Portable-x64.zip`: a real archive-based portable build. Extract the ZIP and run `Puzzle Hunt Workbench.exe` from the extracted `Puzzle Hunt Workbench` folder. It does not install the application or create an uninstaller.
+
+The Windows portable archive contains a small marker file that tells Puzzle Hunt Workbench to keep its default application data in a `Puzzle Hunt Workbench Data` folder beside that extracted portable copy. Moving the extracted folder therefore moves the default portable application data with it. If you explicitly choose a different application-data location in Settings, that choice still takes precedence.
+
+The old v0.1.1/v0.1.2 `Windows-Portable.exe` was electron-builder's single-file self-extracting portable target. Starting with v0.1.3 it is no longer published; the archive-based ZIP is the canonical Windows portable distribution.
 
 On macOS, the `.zip` build can be unpacked and run without an installer; the `.dmg` is the normal distribution image. On Linux, both `.AppImage` and `.tar.gz` are no-installer distribution options.
 
@@ -83,9 +87,11 @@ Package the current platform:
 npm run dist
 ```
 
+On Windows this command builds the NSIS Setup executable plus the archive-based portable ZIP. On macOS/Linux it builds the configured platform artifacts.
+
 ## Release process
 
-Pull requests to `main` run source/unit checks and Windows, macOS and Linux packaging. A successful version-changing merge to `main` builds all three platforms and creates the GitHub Release matching `package.json` (currently `v0.1.2`).
+Pull requests to `main` run source/unit checks and Windows, macOS and Linux packaging. A successful version-changing merge to `main` builds all three platforms and creates the GitHub Release matching `package.json` (currently `v0.1.3`).
 
 See `docs/ROADMAP.md` for shipped history beginning at v0.1.0 and the planned development trajectory.
 
