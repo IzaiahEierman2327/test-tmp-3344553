@@ -6,6 +6,8 @@ const path = require('node:path');
 const DATA_DIR_NAME = 'Puzzle Hunt Workbench Data';
 const BOOTSTRAP_FILE = '.puzzle-hunt-workbench-bootstrap.json';
 const PORTABLE_MARKER_FILE = '.puzzle-hunt-workbench-portable';
+const BROWSER_SESSION_DIR_NAME = 'browser-session';
+const RUNTIME_SESSION_PREFIX = 'puzzle-hunt-workbench-runtime-';
 
 function cleanPath(value) {
   return path.resolve(String(value || ''));
@@ -28,7 +30,8 @@ function dataRootFromParent(parent) {
   return path.basename(selected) === DATA_DIR_NAME ? selected : path.join(selected, DATA_DIR_NAME);
 }
 
-function bootstrapPath(appData) {
+function bootstrapPath(appData, portableDir = null) {
+  if (portableDir) return path.join(cleanPath(portableDir), BOOTSTRAP_FILE);
   return path.join(cleanPath(appData), BOOTSTRAP_FILE);
 }
 
@@ -98,9 +101,28 @@ function performPendingMigration(bootstrapFile, bootstrap) {
   }
 }
 
+function verifyWritableDirectory(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  const first = path.join(directory, `.phw-write-check-${process.pid}-${Date.now()}.tmp`);
+  const second = `${first}.moved`;
+  try {
+    fs.writeFileSync(first, 'write-check', 'utf8');
+    fs.renameSync(first, second);
+  } finally {
+    try { fs.rmSync(first, { force: true }); } catch {}
+    try { fs.rmSync(second, { force: true }); } catch {}
+  }
+}
+
+function createRuntimeSessionDir(tempDir) {
+  const parent = cleanPath(tempDir);
+  fs.mkdirSync(parent, { recursive: true });
+  return fs.mkdtempSync(path.join(parent, RUNTIME_SESSION_PREFIX));
+}
+
 function prepareDataPaths(app, { portableDir = detectPortableDir() } = {}) {
   const defaultUserData = app.getPath('userData');
-  const file = bootstrapPath(app.getPath('appData'));
+  const file = bootstrapPath(app.getPath('appData'), portableDir);
   let bootstrap = readBootstrap(file);
   let migrationError = null;
 
@@ -112,17 +134,32 @@ function prepareDataPaths(app, { portableDir = detectPortableDir() } = {}) {
 
   let dataRoot = resolveDataRoot({ defaultUserData, portableDir, bootstrap });
   try {
-    fs.mkdirSync(dataRoot, { recursive: true });
+    verifyWritableDirectory(dataRoot);
   } catch (error) {
+    if (portableDir) {
+      throw new Error(
+        `Portable data folder is not writable: ${dataRoot}. Fully extract the ZIP to a writable folder before launching. ${error.message}`,
+      );
+    }
     migrationError ||= `Configured data folder is unavailable; using the default folder. ${error.message}`;
     dataRoot = cleanPath(defaultUserData);
-    fs.mkdirSync(dataRoot, { recursive: true });
+    verifyWritableDirectory(dataRoot);
+  }
+
+  const browserSessionDir = path.join(dataRoot, BROWSER_SESSION_DIR_NAME);
+  verifyWritableDirectory(browserSessionDir);
+
+  let runtimeSessionDir = null;
+  if (portableDir) {
+    runtimeSessionDir = createRuntimeSessionDir(app.getPath('temp'));
+    app.setPath('sessionData', runtimeSessionDir);
   }
 
   app.setPath('userData', dataRoot);
-  app.setPath('sessionData', dataRoot);
   return {
     dataRoot,
+    browserSessionDir,
+    runtimeSessionDir,
     bootstrapFile: file,
     defaultUserData: cleanPath(defaultUserData),
     portableMode: Boolean(portableDir),
@@ -145,7 +182,10 @@ function planDataMigration({ bootstrapFile, currentDataRoot, targetParent }) {
 
 module.exports = {
   DATA_DIR_NAME,
+  BOOTSTRAP_FILE,
   PORTABLE_MARKER_FILE,
+  BROWSER_SESSION_DIR_NAME,
+  RUNTIME_SESSION_PREFIX,
   bootstrapPath,
   dataRootFromParent,
   detectPortableDir,
@@ -153,6 +193,8 @@ module.exports = {
   readBootstrap,
   resolveDataRoot,
   performPendingMigration,
+  verifyWritableDirectory,
+  createRuntimeSessionDir,
   prepareDataPaths,
   planDataMigration,
 };
