@@ -39,7 +39,7 @@ jobs:
         run: PHW_SMOKE_TEST=1 xvfb-run -a npx electron . --no-sandbox
       - name: Build desktop packages
         run: node scripts/build-with-retry.js
-      - name: Validate Windows Setup and portable ZIP
+      - name: Validate and launch Windows portable ZIP
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -50,6 +50,7 @@ jobs:
           if (-not (Test-Path $setup)) { throw "Missing Windows Setup artifact: $setup" }
           if (-not (Test-Path $zip)) { throw "Missing Windows portable ZIP: $zip" }
           if ($oldPortable) { throw "Single-file Windows-Portable.exe must not be produced." }
+
           $extract = Join-Path $env:RUNNER_TEMP 'phw-portable-validation'
           Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
           Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
@@ -58,6 +59,41 @@ jobs:
           if (-not $exe) { throw 'Portable ZIP does not contain Puzzle Hunt Workbench.exe.' }
           if (-not $marker) { throw 'Portable ZIP does not contain the portable-mode marker.' }
           if ($exe.DirectoryName -ne $marker.DirectoryName) { throw 'Portable marker must sit beside the executable.' }
+
+          # Poison global APPDATA with a valid but wrong bootstrap. A true portable launch
+          # must ignore it and create its own data beside the extracted executable.
+          $isolatedAppData = Join-Path $env:RUNNER_TEMP 'phw-portable-global-appdata'
+          $poisonData = Join-Path $env:RUNNER_TEMP 'phw-poison-data-root'
+          Remove-Item $isolatedAppData -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $poisonData -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $isolatedAppData -Force | Out-Null
+          $poisonBootstrap = Join-Path $isolatedAppData '.puzzle-hunt-workbench-bootstrap.json'
+          @{ version = 2; dataRoot = $poisonData } | ConvertTo-Json | Set-Content -LiteralPath $poisonBootstrap -Encoding utf8
+
+          $env:APPDATA = $isolatedAppData
+          $env:PHW_SMOKE_TEST = '1'
+          $env:PHW_EXPECT_PORTABLE = '1'
+          $log = Join-Path $env:RUNNER_TEMP 'phw-portable-electron.log'
+          Remove-Item $log -Force -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $exe.FullName -ArgumentList @('--enable-logging=file', "--log-file=$log") -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content -LiteralPath $log }
+            throw "Portable smoke test exited with code $($process.ExitCode)."
+          }
+
+          $dataRoot = Join-Path $exe.DirectoryName 'Puzzle Hunt Workbench Data'
+          $browserSession = Join-Path $dataRoot 'browser-session'
+          if (-not (Test-Path $dataRoot)) { throw 'Portable launch did not create data beside the executable.' }
+          if (-not (Test-Path $browserSession)) { throw 'Portable launch did not create persistent browser-session storage.' }
+          if (Test-Path $poisonData) { throw 'Portable launch incorrectly honored the global APPDATA bootstrap.' }
+
+          if (Test-Path $log) {
+            $cacheErrors = Select-String -LiteralPath $log -Pattern 'Unable to move the cache|Unable to create cache|Gpu Cache Creation failed' -SimpleMatch:$false
+            if ($cacheErrors) {
+              Get-Content -LiteralPath $log
+              throw 'Portable launch emitted Chromium disk-cache creation errors.'
+            }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: puzzle-hunt-workbench-${{ runner.os }}-${{ runner.arch }}
