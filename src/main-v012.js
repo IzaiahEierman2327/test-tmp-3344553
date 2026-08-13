@@ -129,7 +129,14 @@ function handle(channel, fn) {
 }
 
 function configureSession() {
-  sharedSession = session.fromPartition(SESSION_PARTITION, { cache: true });
+  if (dataPaths.portableMode) {
+    sharedSession = session.fromPath(dataPaths.browserSessionDir, { cache: false });
+    if (dataPaths.runtimeSessionDir) {
+      sharedSession.setCodeCachePath(path.join(dataPaths.runtimeSessionDir, 'browser-code-cache'));
+    }
+  } else {
+    sharedSession = session.fromPartition(SESSION_PARTITION, { cache: true });
+  }
   const allowedPermissions = new Set(['clipboard-sanitized-write', 'fullscreen']);
   const permissionAllowed = (permission, url) => allowedPermissions.has(permission) && /^https:\/\//i.test(String(url || ''));
 
@@ -900,7 +907,7 @@ app.whenReady().then(async () => {
 
   if (process.env.PHW_SMOKE_TEST === '1') {
     const { runSmokeTest } = require('./smoke-test');
-    await runSmokeTest();
+    await runSmokeTest({ browserSession: sharedSession, dataPaths });
     await prepareQuit();
     quitPrepared = true;
     allowMainDestroy = true;
