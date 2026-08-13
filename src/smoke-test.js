@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
-const { BrowserWindow, WebContentsView, clipboard, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, clipboard, session } = require('electron');
 const { isCacheableMainFrame } = require('./core/cache-policy');
 
 function listen(server) {
@@ -49,10 +49,39 @@ async function loadAndWait(contents, url, options) {
   await finished;
 }
 
-async function runSmokeTest() {
+async function verifyPortableStorage(browserSession, dataPaths) {
+  if (!dataPaths) return;
+  if (process.env.PHW_EXPECT_PORTABLE === '1') {
+    assert.equal(dataPaths.portableMode, true, 'packaged portable smoke must detect portable mode');
+  }
+  if (!dataPaths.portableMode) return;
+
+  assert.ok(dataPaths.runtimeSessionDir, 'portable mode must use an isolated runtime session directory');
+  assert.equal(
+    path.resolve(app.getPath('sessionData')),
+    path.resolve(dataPaths.runtimeSessionDir),
+    'Chromium runtime sessionData must be isolated from the portable data folder',
+  );
+  assert.equal(
+    path.resolve(browserSession.getStoragePath()),
+    path.resolve(dataPaths.browserSessionDir),
+    'persistent browser storage must stay in the portable browser-session folder',
+  );
+
+  const first = path.join(dataPaths.dataRoot, `.phw-portable-smoke-${process.pid}.tmp`);
+  const second = `${first}.moved`;
+  await fs.writeFile(first, 'portable-write-smoke', 'utf8');
+  await fs.rename(first, second);
+  await fs.rm(second, { force: true });
+}
+
+async function runSmokeTest({ browserSession = null, dataPaths = null } = {}) {
   const server = http.createServer((req, res) => {
     if (req.url === '/ok') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'set-cookie': 'phw_smoke_cookie=ok; Path=/; SameSite=Lax',
+      });
       res.end('<!doctype html><html><body><p id="copy">clipboard-smoke-value</p></body></html>');
       return;
     }
@@ -77,8 +106,9 @@ async function runSmokeTest() {
 
   const address = await listen(server);
   const base = `http://127.0.0.1:${address.port}`;
-  const smokeSession = session.fromPartition(`persist:phw-smoke-${process.pid}`, { cache: true });
-  assert.equal(smokeSession.isPersistent(), true, 'persist: session must be persistent');
+  const smokeSession = browserSession || session.fromPartition(`persist:phw-smoke-${process.pid}`, { cache: true });
+  assert.equal(smokeSession.isPersistent(), true, 'browser session must be persistent');
+  await verifyPortableStorage(smokeSession, dataPaths);
 
   const requests = new Map();
   const filter = { urls: [`${base}/*`] };
@@ -105,8 +135,6 @@ async function runSmokeTest() {
     });
   });
 
-  // The window is visible only inside Xvfb in CI. A visible, focused view matches
-  // the user path for native selection/copy semantics and can own the X11 clipboard.
   const win = new BrowserWindow({ show: true, width: 800, height: 600 });
   const view = new WebContentsView({
     webPreferences: {
@@ -131,6 +159,13 @@ async function runSmokeTest() {
       method: getRequest.method,
       statusCode: getRequest.statusCode,
     }), true, '200 GET page should be cacheable');
+
+    const cookies = await smokeSession.cookies.get({ url: base });
+    assert.ok(
+      cookies.some((cookie) => cookie.name === 'phw_smoke_cookie' && cookie.value === 'ok'),
+      'persistent browser session must write cookies',
+    );
+    await view.webContents.executeJavaScript("localStorage.setItem('phw-smoke-storage', 'ok'); 'ok'");
 
     const snapshot = path.join(tmp, 'ok.mhtml');
     await view.webContents.savePage(snapshot, 'MHTML');
