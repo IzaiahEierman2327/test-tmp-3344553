@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const DATA_DIR_NAME = 'Puzzle Hunt Workbench Data';
 const BOOTSTRAP_FILE = '.puzzle-hunt-workbench-bootstrap.json';
+const PORTABLE_MARKER_FILE = '.puzzle-hunt-workbench-portable';
 
 function cleanPath(value) {
   return path.resolve(String(value || ''));
@@ -44,6 +45,12 @@ function writeBootstrap(file, value) {
   const tmp = `${file}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   fs.renameSync(tmp, file);
+}
+
+function detectPortableDir({ env = process.env, execPath = process.execPath, existsSync = fs.existsSync } = {}) {
+  if (env.PORTABLE_EXECUTABLE_DIR) return cleanPath(env.PORTABLE_EXECUTABLE_DIR);
+  const executableDir = path.dirname(cleanPath(execPath));
+  return existsSync(path.join(executableDir, PORTABLE_MARKER_FILE)) ? executableDir : null;
 }
 
 function resolveDataRoot({ defaultUserData, portableDir, bootstrap = {} }) {
@@ -91,7 +98,7 @@ function performPendingMigration(bootstrapFile, bootstrap) {
   }
 }
 
-function prepareDataPaths(app, { portableDir = process.env.PORTABLE_EXECUTABLE_DIR } = {}) {
+function prepareDataPaths(app, { portableDir = detectPortableDir() } = {}) {
   const defaultUserData = app.getPath('userData');
   const file = bootstrapPath(app.getPath('appData'));
   let bootstrap = readBootstrap(file);
@@ -138,8 +145,10 @@ function planDataMigration({ bootstrapFile, currentDataRoot, targetParent }) {
 
 module.exports = {
   DATA_DIR_NAME,
+  PORTABLE_MARKER_FILE,
   bootstrapPath,
   dataRootFromParent,
+  detectPortableDir,
   pathsOverlap,
   readBootstrap,
   resolveDataRoot,
