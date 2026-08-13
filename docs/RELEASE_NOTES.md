@@ -1,38 +1,35 @@
-# Puzzle Hunt Workbench v0.1.2
+# Puzzle Hunt Workbench v0.1.3
 
-Hardening & browser-semantics release.
+Windows portable packaging correction.
 
 Highlights:
 
-- Puzzle snapshots are now bound to the exact normalized URL.
-- Automatic snapshots are created only for successful main-frame HTTP(S) `GET` responses.
-- Form/answer `POST` submissions are never automatically cached or replayed through offline fallback.
-- HTTP 429/5xx outage responses cannot overwrite a last-known-good puzzle snapshot.
-- Fresh cached GET pages may automatically replace an outage response when fallback is enabled.
-- Puzzle, Canvas and Tool pages support system clipboard copy and native edit/copy/paste context menus.
-- The shared `persist:` browser session is explicitly flushed at shutdown/restart so persistent cookies and web storage survive normal restarts. Sites that intentionally issue session-only cookies can still require a new login after a full application restart.
-- Hidden Tools are eligible for idle sleeping instead of keeping the selected hidden tool alive forever.
-- macOS window close/activate behavior has been corrected.
-- State persistence recovers after a transient write failure.
-- Data-folder relocation is now a recoverable copy-and-switch migration; a failed migration keeps using the previous data folder instead of blocking startup.
-- IPC calls are restricted to the trusted local chrome renderer and remote web permissions use a conservative allowlist.
-- The Linux Electron smoke test now exercises a local HTTP server, persistent sessions, MHTML creation, clipboard copy, HTTP status handling and GET-vs-POST cache policy instead of only launching for a few seconds.
-- The project roadmap now records v0.1.0/v0.1.1 history and the planned v0.2.x–v1.0 trajectory.
+- Windows no longer publishes the single-file `Windows-Portable.exe` artifact.
+- The canonical Windows portable build is now `Puzzle-Hunt-Workbench-0.1.3-Windows-Portable-x64.zip`.
+- The portable ZIP contains the complete unpacked application directory. Extract it and run `Puzzle Hunt Workbench.exe`; no installer or uninstaller is involved.
+- The archive copy carries a portable marker that keeps its default `Puzzle Hunt Workbench Data` folder beside the extracted application directory.
+- The NSIS `Windows-Setup.exe` installer is built before the portable marker is added, so installed copies keep normal installed-app data behavior.
+- Runtime support for the older v0.1.1/v0.1.2 single-exe portable environment is retained for users who keep those builds.
+- The v0.1.2 cache, login/session, submission, clipboard, lifecycle, migration and security changes are otherwise unchanged.
 
 Manual testing requested after release:
 
-1. Log into a real hunt/tool site, restart, and verify persistent-authentication sites remain logged in.
-2. Submit a real answer/form and verify it executes normally; the POST itself must not become an offline snapshot.
-3. Verify an unavailable/5xx GET puzzle page falls back only to a cache of that same URL.
-4. Copy selected text from Puzzle, Canvas and Tool pages using Ctrl/Cmd+C and the context menu.
-5. On macOS, close the main window and reopen it from the Dock.
-6. Exercise application-data relocation and restart.
+1. Download and extract `Windows-Portable-x64.zip`; confirm it is a normal application directory, not another self-extracting portable executable.
+2. Launch `Puzzle Hunt Workbench.exe` directly from the extracted folder without installing anything.
+3. Confirm the default `Puzzle Hunt Workbench Data` directory appears beside the extracted portable copy.
+4. Move the extracted portable folder to another writable location and launch it again.
+5. Install `Windows-Setup.exe` separately and confirm the installed copy does not default to a portable data directory beside its executable.
+6. Re-check login persistence, form submission behavior, cache fallback and clipboard copy from v0.1.2.
 
 The application remains unsigned/not notarized, so Windows/macOS may show an unknown-publisher warning.
 
+## v0.1.2
+
+Hardening & browser-semantics release: exact-URL GET/2xx snapshots, safe POST semantics, last-known-good outage fallback, persistent browser-session flushing, clipboard support, Tool sleeping fixes, macOS lifecycle fixes, recoverable state/data migration, IPC/permission hardening and real Electron smoke coverage.
+
 ## v0.1.1
 
-Portable and storage-control update: clearly named Setup/Portable artifacts, selectable Windows install location and configurable application-data storage.
+Portable and storage-control update: clearly named Setup/Portable artifacts, selectable Windows install location and configurable application-data storage. The Windows portable artifact at this point was still electron-builder's single-file self-extracting `.exe` target; v0.1.3 corrects that distribution format.
 
 ## v0.1.0
 

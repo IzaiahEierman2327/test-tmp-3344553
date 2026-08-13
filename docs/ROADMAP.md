@@ -31,13 +31,13 @@ Shipped scope:
 - Configurable application-data location with restart-time migration.
 - macOS ZIP and Linux AppImage/tar.gz no-installer artifacts.
 
-Known limitation carried forward: migration and cache semantics needed stronger failure recovery and integration coverage.
+Historical packaging mistake: Windows "Portable" used electron-builder's single-file self-extracting `.exe` target. It required no installation, but did not match this project's intended archive-based portable distribution model.
 
-## v0.1.2 — Hardening & browser semantics (current)
+## v0.1.2 — Hardening & browser semantics (historical)
 
 Goal: establish a trustworthy baseline before adding broader product features.
 
-Required scope:
+Shipped scope:
 
 - Cache is bound to the exact normalized page URL.
 - Automatic snapshots are limited to successful main-frame HTTP(S) GET responses.
@@ -53,14 +53,29 @@ Required scope:
 - Real Electron smoke coverage validates persistent-session creation, MHTML saving, clipboard copy, GET/POST cache policy and 5xx behavior against a local HTTP server.
 - Release/version behavior is tightened so an unchanged package version cannot silently create a new logical release.
 
+## v0.1.3 — True Windows portable archive (current)
+
+Goal: correct the Windows portable distribution format without changing application behavior.
+
+Required scope:
+
+- Keep `Windows-Setup.exe` as the assisted installer.
+- Stop publishing the single-file `Windows-Portable.exe` artifact.
+- Publish `Windows-Portable-x64.zip` containing the complete unpacked application directory.
+- Portable ZIP is extracted and run directly; no installer or uninstaller is involved.
+- Only the ZIP copy carries the portable marker; the Setup build does not.
+- The ZIP copy keeps its default `Puzzle Hunt Workbench Data` folder beside the extracted application directory.
+- Existing v0.1.1/v0.1.2 single-exe portable mode remains runtime-compatible through `PORTABLE_EXECUTABLE_DIR` for users who keep older builds.
+- CI must actually build both the Windows Setup and portable ZIP and upload both before release.
+
 Manual acceptance after release:
 
-- Log into at least one real hunt/tool site, restart the app and verify the site remains logged in when the site uses persistent authentication storage.
-- Submit a real form/answer and verify the submission executes normally; verify the POST itself is not exposed as an offline snapshot.
-- Disconnect the network or stop a test server and verify a cached GET puzzle page opens without showing a different URL's cache.
-- Select text in Puzzle, Canvas and Tool pages and copy it with Ctrl/Cmd+C and the context menu.
-- On macOS, close the main window and reopen it from the Dock.
-- Exercise data-folder migration, including an intentionally unavailable target if practical.
+- Download `Windows-Portable-x64.zip`, extract it, and confirm it contains a normal application directory rather than another self-extracting executable package.
+- Launch `Puzzle Hunt Workbench.exe` from the extracted directory without installing anything.
+- Confirm `Puzzle Hunt Workbench Data` is created beside the extracted portable application on first use unless an explicit custom data location already exists.
+- Move the extracted portable directory to another writable location and confirm it still launches as a portable copy.
+- Install the Setup build separately and confirm it does not create/use a portable data folder beside the installed executable by default.
+- Re-run the v0.1.2 login/cache/submission/clipboard acceptance checks to ensure the packaging-only correction did not regress browser behavior.
 
 ## v0.2.0 — Browser quality & cache observability (planned)
 
@@ -113,6 +128,6 @@ Release criteria:
 
 ## Versioning policy
 
-- `0.1.x`: correctness and stabilization of the original MVP.
+- `0.1.x`: correctness and stabilization of the original MVP, including distribution-format corrections.
 - `0.2.x`–`0.4.x`: additive product work while interfaces and data structures may still evolve.
 - `1.0.0`: stable storage/migration behavior and public-distribution readiness.

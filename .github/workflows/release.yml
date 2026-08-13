@@ -39,6 +39,25 @@ jobs:
         run: PHW_SMOKE_TEST=1 xvfb-run -a npx electron . --no-sandbox
       - name: Build desktop packages
         run: node scripts/build-with-retry.js
+      - name: Validate Windows Setup and portable ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $zip = "dist/Puzzle-Hunt-Workbench-$version-Windows-Portable-x64.zip"
+          $setup = "dist/Puzzle-Hunt-Workbench-$version-Windows-Setup.exe"
+          $oldPortable = Get-ChildItem -Path dist -Filter '*Windows-Portable.exe' -ErrorAction SilentlyContinue
+          if (-not (Test-Path $setup)) { throw "Missing Windows Setup artifact: $setup" }
+          if (-not (Test-Path $zip)) { throw "Missing Windows portable ZIP: $zip" }
+          if ($oldPortable) { throw "Single-file Windows-Portable.exe must not be produced." }
+          $extract = Join-Path $env:RUNNER_TEMP 'phw-portable-validation'
+          Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+          $exe = Get-ChildItem -Path $extract -Recurse -Filter 'Puzzle Hunt Workbench.exe' | Select-Object -First 1
+          $marker = Get-ChildItem -Path $extract -Recurse -Force -Filter '.puzzle-hunt-workbench-portable' | Select-Object -First 1
+          if (-not $exe) { throw 'Portable ZIP does not contain Puzzle Hunt Workbench.exe.' }
+          if (-not $marker) { throw 'Portable ZIP does not contain the portable-mode marker.' }
+          if ($exe.DirectoryName -ne $marker.DirectoryName) { throw 'Portable marker must sit beside the executable.' }
       - uses: actions/upload-artifact@v4
         with:
           name: puzzle-hunt-workbench-${{ runner.os }}-${{ runner.arch }}

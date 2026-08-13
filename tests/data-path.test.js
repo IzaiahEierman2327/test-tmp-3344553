@@ -8,7 +8,9 @@ const os = require('node:os');
 const path = require('node:path');
 const {
   DATA_DIR_NAME,
+  PORTABLE_MARKER_FILE,
   dataRootFromParent,
+  detectPortableDir,
   pathsOverlap,
   readBootstrap,
   resolveDataRoot,
@@ -19,6 +21,35 @@ const {
 test('portable builds default beside the portable executable', () => {
   const root = resolveDataRoot({ defaultUserData: path.resolve('/default'), portableDir: path.resolve('/portable'), bootstrap: {} });
   assert.equal(root, path.join(path.resolve('/portable'), DATA_DIR_NAME));
+});
+
+test('archive portable marker beside executable enables portable mode', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'phw-portable-marker-'));
+  try {
+    const execPath = path.join(dir, 'Puzzle Hunt Workbench.exe');
+    await fsp.writeFile(path.join(dir, PORTABLE_MARKER_FILE), 'portable');
+    assert.equal(detectPortableDir({ env: {}, execPath }), path.resolve(dir));
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('installed build without portable marker uses normal user data', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'phw-installed-marker-'));
+  try {
+    const execPath = path.join(dir, 'Puzzle Hunt Workbench.exe');
+    assert.equal(detectPortableDir({ env: {}, execPath }), null);
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('legacy single-exe portable environment remains supported', () => {
+  const portableDir = path.resolve('/legacy-portable');
+  assert.equal(
+    detectPortableDir({ env: { PORTABLE_EXECUTABLE_DIR: portableDir }, execPath: path.resolve('/installed/app.exe') }),
+    portableDir,
+  );
 });
 
 test('bootstrap data root overrides portable and default locations', () => {
