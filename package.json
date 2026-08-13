@@ -1,6 +1,6 @@
 {
   "name": "puzzle-hunt-workbench",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Desktop puzzle-hunt workspace with multi-tab puzzle browsing, a persistent canvas, sleeping tools, and safe offline puzzle snapshots.",
   "author": "Puzzle Hunt Workbench contributors",
