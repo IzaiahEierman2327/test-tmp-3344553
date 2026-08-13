@@ -53,29 +53,44 @@ Shipped scope:
 - Real Electron smoke coverage validates persistent-session creation, MHTML saving, clipboard copy, GET/POST cache policy and 5xx behavior against a local HTTP server.
 - Release/version behavior is tightened so an unchanged package version cannot silently create a new logical release.
 
-## v0.1.3 — True Windows portable archive (current)
+## v0.1.3 — True Windows portable archive (historical)
 
-Goal: correct the Windows portable distribution format without changing application behavior.
+Goal: correct the Windows portable distribution format.
+
+Shipped scope:
+
+- Kept `Windows-Setup.exe` as the assisted installer.
+- Stopped publishing the single-file `Windows-Portable.exe` artifact.
+- Published `Windows-Portable-x64.zip` containing the complete unpacked application directory.
+- Only the ZIP copy carried the portable marker; Setup did not.
+- Preserved compatibility with the older `PORTABLE_EXECUTABLE_DIR` environment used by the v0.1.1/v0.1.2 single-exe build.
+
+Historical runtime defect: the archive format was correct, but portable `userData` and Chromium `sessionData` shared the same `Puzzle Hunt Workbench Data` root. On affected Windows systems Chromium could fail to create/move disk or GPU cache files with `Access Denied (0x5)`. The release workflow validated ZIP structure but did not actually launch the packaged Windows portable executable, so this defect escaped automation.
+
+## v0.1.4 — Windows portable runtime isolation (current)
+
+Goal: make the archive-based Windows portable build actually launch reliably while preserving portable browser state.
 
 Required scope:
 
-- Keep `Windows-Setup.exe` as the assisted installer.
-- Stop publishing the single-file `Windows-Portable.exe` artifact.
-- Publish `Windows-Portable-x64.zip` containing the complete unpacked application directory.
-- Portable ZIP is extracted and run directly; no installer or uninstaller is involved.
-- Only the ZIP copy carries the portable marker; the Setup build does not.
-- The ZIP copy keeps its default `Puzzle Hunt Workbench Data` folder beside the extracted application directory.
-- Existing v0.1.1/v0.1.2 single-exe portable mode remains runtime-compatible through `PORTABLE_EXECUTABLE_DIR` for users who keep older builds.
-- CI must actually build both the Windows Setup and portable ZIP and upload both before release.
+- Keep workspace state and puzzle snapshots in `Puzzle Hunt Workbench Data` beside the extracted executable by default.
+- Keep portable browser cookies/local storage/IndexedDB in a dedicated persistent `Puzzle Hunt Workbench Data/browser-session` directory.
+- Use `session.fromPath(...)` for the portable remote-browser session and disable Chromium HTTP disk cache for that session.
+- Redirect disposable Electron/Chromium runtime `sessionData` to a unique OS temporary directory during portable launches.
+- Keep installed builds on the existing `persist:puzzle-hunt-workbench` partition so installed login state is not intentionally reset.
+- Store/read the portable bootstrap beside the portable executable instead of inheriting machine-global app-data configuration.
+- Probe portable data locations with an actual write-and-rename operation before use.
+- Extract and launch the final Windows portable ZIP in GitHub Actions, not merely inspect its contents.
+- Packaged smoke must validate portable detection, adjacent durable data, persistent browser-session storage, independence from machine-global bootstrap state, and absence of the reported Chromium disk-cache creation errors.
 
 Manual acceptance after release:
 
-- Download `Windows-Portable-x64.zip`, extract it, and confirm it contains a normal application directory rather than another self-extracting executable package.
-- Launch `Puzzle Hunt Workbench.exe` from the extracted directory without installing anything.
-- Confirm `Puzzle Hunt Workbench Data` is created beside the extracted portable application on first use unless an explicit custom data location already exists.
-- Move the extracted portable directory to another writable location and confirm it still launches as a portable copy.
-- Install the Setup build separately and confirm it does not create/use a portable data folder beside the installed executable by default.
-- Re-run the v0.1.2 login/cache/submission/clipboard acceptance checks to ensure the packaging-only correction did not regress browser behavior.
+- Fully extract the ZIP to a normal writable directory and launch without administrator privileges.
+- Confirm there are no `Unable to move the cache`, `Unable to create cache`, or `Gpu Cache Creation failed` startup errors.
+- Confirm `Puzzle Hunt Workbench Data/browser-session` is created and normal persistent website login survives a clean restart when the website uses persistent browser storage.
+- Move the whole portable folder and verify workspace plus browser state move with it.
+- Confirm a machine-global custom data setting from an installed/older copy does not override a fresh portable copy.
+- Re-run puzzle MHTML cache, POST/form submission, clipboard and Tool/Canvas acceptance checks.
 
 ## v0.2.0 — Browser quality & cache observability (planned)
 
@@ -128,6 +143,6 @@ Release criteria:
 
 ## Versioning policy
 
-- `0.1.x`: correctness and stabilization of the original MVP, including distribution-format corrections.
+- `0.1.x`: correctness and stabilization of the original MVP, including distribution-format and portable-runtime corrections.
 - `0.2.x`–`0.4.x`: additive product work while interfaces and data structures may still evolve.
 - `1.0.0`: stable storage/migration behavior and public-distribution readiness.
